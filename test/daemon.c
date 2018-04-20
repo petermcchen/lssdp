@@ -80,10 +80,33 @@ int show_interface_list_and_rebind_socket(lssdp_ctx * lssdp) {
     return 0;
 }
 
+#define WALTZ_SN_LEN	12
+#define WALTZ_GET_SN	"env | grep LOGNAME | cut -d \"=\" -f 2"
+//#define WALTZ_GET_SN	"echo hello"
+//#define WALTZ_GET_SN	"fw_printenv SN | cut -d \"=\" -f 2"
+static char *waltz_sn = NULL;
+static void getLOGNAME(void)
+{
+    FILE *fp;
+    waltz_sn = malloc(WALTZ_SN_LEN);
+    memset(waltz_sn, '\0', WALTZ_SN_LEN);
+    if ( (fp = popen(WALTZ_GET_SN, "r")) == NULL)
+    {
+	printf("popen() error!\n");
+	exit (-1);
+    }
+    while (fgets(waltz_sn, WALTZ_SN_LEN, fp))
+    {
+	waltz_sn[strlen(waltz_sn)-1] = '\0';
+	printf("SN: %s\n", waltz_sn);
+    }
+    pclose(fp);
+}
 
 int main() {
     lssdp_set_log_callback(log_callback);
 
+    getLOGNAME();
     lssdp_ctx lssdp = {
         // .debug = true,           // debug
         .port = 1900,
@@ -100,6 +123,7 @@ int main() {
         .neighbor_list_changed_callback     = show_neighbor_list,
         .network_interface_changed_callback = show_interface_list_and_rebind_socket,
     };
+    strcpy(lssdp.header.sm_id, waltz_sn);
 
     /* get network interface at first time, network_interface_changed_callback will be invoke
      * SSDP socket will be created in callback function
