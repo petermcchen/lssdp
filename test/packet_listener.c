@@ -18,6 +18,22 @@
  *    - show interface list
  *    - re-bind the socket
  */
+FILE *fptr;
+/** Struct: lssdp_packet (copy...) **/
+typedef struct lssdp_packet {
+    char            method      [LSSDP_FIELD_LEN];      // M-SEARCH, NOTIFY, RESPONSE
+    char            st          [LSSDP_FIELD_LEN];      // Search Target
+    char            usn         [LSSDP_FIELD_LEN];      // Unique Service Name
+    char            location    [LSSDP_LOCATION_LEN];   // Location
+
+    /* Additional SSDP Header Fields */
+    char            sm_id       [LSSDP_FIELD_LEN];
+    char            device_type [LSSDP_FIELD_LEN];
+    long long       update_time;
+} lssdp_packet;
+int Search_in_File(char *);
+extern int lssdp_packet_parser(const char *, size_t, lssdp_packet *);
+extern int get_colon_index(const char *, size_t, size_t);
 
 void log_callback(const char * file, const char * tag, int level, int line, const char * func, const char * message) {
     char * level_name = "DEBUG";
@@ -59,13 +75,56 @@ int show_interface_list_and_rebind_socket(lssdp_ctx * lssdp) {
     return 0;
 }
 
-int show_ssdp_packet(struct lssdp_ctx * lssdp, const char * packet, size_t packet_len) {
-    printf("%s", packet);
+int show_ssdp_packet(struct lssdp_ctx * lssdp, const char * buffer, size_t buffer_len) {
+    //printf(">>>%s\n", buffer);
+    lssdp_packet packet = {};
+    lssdp_packet_parser(buffer, buffer_len, &packet);
+    if (strlen(packet.sm_id) > 9) {
+        printf(">>>SNO: %s\n", packet.sm_id);
+        //printf(">>>IP: %s\n", packet.location);
+        int colon = get_colon_index(packet.location, 1, strlen(packet.location));
+        //printf(">>>Colon Position: %d\n", colon);
+        packet.location[colon] = '\0';
+        printf(">>>IP: %s\n", packet.location);
+
+        if (Search_in_File(packet.sm_id) == 0) // not found
+        {
+            fptr = fopen("/tmp/waltzlist.txt","a");
+            fprintf(fptr, "%s %s\n", packet.sm_id, packet.location);
+            fclose(fptr);
+        }
+    }
     return 0;
 }
 
+int Search_in_File(char *str) {
+	int line_num = 1;
+	int find_result = 0;
+	char temp[32];
 
-int main() {
+    fptr = fopen("/tmp/waltzlist.txt","r");
+    fseek(fptr, 0L, SEEK_END);
+    printf( "Call Search_in_File with seek value=%ld.\n", ftell(fptr) );
+    fseek(fptr, 0L, SEEK_SET);
+	while(fgets(temp, 32, fptr) != NULL) {
+        printf("temp = %s.\n", temp);
+		if((strstr(temp, str)) != NULL) {
+			printf("A match found on line: %d\n", line_num);
+			printf("\n%s\n", temp);
+			find_result++;
+		}
+		line_num++;
+	}
+	if(find_result == 0) {
+		printf("Sorry, couldn't find a match (%s).\n", str);
+	}
+    fclose(fptr);
+   	return(find_result);
+}
+
+int main() {  
+    fptr = fopen("/tmp/waltzlist.txt","w");
+    fclose(fptr);
     lssdp_set_log_callback(log_callback);
 
     lssdp_ctx lssdp = {
@@ -120,6 +179,5 @@ int main() {
             last_time = current_time;               // update last_time
         }
     }
-
     return EXIT_SUCCESS;
 }
