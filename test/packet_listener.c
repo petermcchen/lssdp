@@ -19,6 +19,7 @@
  *    - re-bind the socket
  */
 FILE *fptr;
+bool debug_flag = false;
 /** Struct: lssdp_packet (copy...) **/
 typedef struct lssdp_packet {
     char            method      [LSSDP_FIELD_LEN];      // M-SEARCH, NOTIFY, RESPONSE
@@ -79,10 +80,12 @@ int show_ssdp_packet(struct lssdp_ctx * lssdp, const char * buffer, size_t buffe
     lssdp_packet packet = {};
     lssdp_packet_parser(buffer, buffer_len, &packet);
     if (strlen(packet.sm_id) > 9) {
-        printf(">>>SNO: %s\n", packet.sm_id);
+        if (debug_flag)
+            printf(">>>SNO: %s\n", packet.sm_id);
         int colon = get_colon_index(packet.location, 1, strlen(packet.location));
         packet.location[colon] = '\0';
-        printf(">>>IP: %s\n", packet.location);
+        if (debug_flag)
+            printf(">>>IP: %s\n", packet.location);
 
         if (Search_in_File(packet.sm_id) == 0) // not found
         {
@@ -117,7 +120,16 @@ int Search_in_File(char *str) {
    	return(find_result);
 }
 
-int main() {  
+int main(int argc, char *argv[]) {  
+    printf("cmdline args count=%d\n", argc);
+    printf("exe name=%s\n", argv[0]);
+    if (argc > 2) {
+        printf("too many arguments\n");
+        return (-1);
+    } else if (argc == 2) {
+        if (strcmp("-d", argv[1]) == 0)
+            debug_flag = true;
+    }
     fptr = fopen("/tmp/waltzlist.txt","w");
     fclose(fptr);
     lssdp_set_log_callback(log_callback);
