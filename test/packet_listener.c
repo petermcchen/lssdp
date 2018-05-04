@@ -20,21 +20,6 @@
  */
 FILE *fptr;
 bool debug_flag = false;
-/** Struct: lssdp_packet (copy...) **/
-typedef struct lssdp_packet {
-    char            method      [LSSDP_FIELD_LEN];      // M-SEARCH, NOTIFY, RESPONSE
-    char            st          [LSSDP_FIELD_LEN];      // Search Target
-    char            usn         [LSSDP_FIELD_LEN];      // Unique Service Name
-    char            location    [LSSDP_LOCATION_LEN];   // Location
-
-    /* Additional SSDP Header Fields */
-    char            sm_id       [LSSDP_FIELD_LEN];
-    char            device_type [LSSDP_FIELD_LEN];
-    long long       update_time;
-} lssdp_packet;
-int Search_in_File(char *);
-extern int lssdp_packet_parser(const char *, size_t, lssdp_packet *);
-extern int get_colon_index(const char *, size_t, size_t);
 
 void log_callback(const char * file, const char * tag, int level, int line, const char * func, const char * message) {
     char * level_name = "DEBUG";
@@ -76,48 +61,31 @@ int show_interface_list_and_rebind_socket(lssdp_ctx * lssdp) {
     return 0;
 }
 
-int show_ssdp_packet(struct lssdp_ctx * lssdp, const char * buffer, size_t buffer_len) {
-    lssdp_packet packet = {};
-    lssdp_packet_parser(buffer, buffer_len, &packet);
-    if (strlen(packet.sm_id) > 9) {
-        if (debug_flag)
-            printf(">>>SNO: %s\n", packet.sm_id);
-        int colon = get_colon_index(packet.location, 1, strlen(packet.location));
-        packet.location[colon] = '\0';
-        if (debug_flag)
-            printf(">>>IP: %s\n", packet.location);
-
-        if (Search_in_File(packet.sm_id) == 0) // not found
-        {
-            fptr = fopen("/tmp/waltzlist.txt","a");
-            fprintf(fptr, "%s %s\n", packet.sm_id, packet.location);
-            fclose(fptr);
-        }
-    }
+int show_ssdp_packet(struct lssdp_ctx * lssdp, const char * packet, size_t packet_len) {
+    //printf("%s", packet);
     return 0;
 }
 
-int Search_in_File(char *str) {
-	int line_num = 1;
-	int find_result = 0;
-	char temp[32];
+int show_neighbor_list(lssdp_ctx * lssdp) {
+    int i = 0;
+    lssdp_nbr * nbr;
+    fptr = fopen("/tmp/waltzlist.txt","w");
 
-    fptr = fopen("/tmp/waltzlist.txt","r");
-    fseek(fptr, 0L, SEEK_END);
-    fseek(fptr, 0L, SEEK_SET);
-	while(fgets(temp, 32, fptr) != NULL) {
-		if((strstr(temp, str)) != NULL) {
-			//printf("A match found on line: %d\n", line_num);
-			//printf("\n%s\n", temp);
-			find_result++;
-		}
-		line_num++;
-	}
-	if(find_result == 0) {
-		//printf("Sorry, couldn't find a match (%s).\n", str);
-	}
+    puts("\nSSDP List:");
+    for (nbr = lssdp->neighbor_list; nbr != NULL; nbr = nbr->next) {
+        printf("%d. id = %-9s, ip = %-20s, name = %-12s, device_type = %-8s (%lld)\n",
+            ++i,
+            nbr->sm_id,
+            nbr->location,
+            nbr->usn,
+            nbr->device_type,
+            nbr->update_time
+        );
+        fprintf(fptr, "%s %s\n", nbr->sm_id, nbr->location);
+    }
+    printf("%s\n", i == 0 ? "Empty" : "");
     fclose(fptr);
-   	return(find_result);
+    return 0;
 }
 
 int main(int argc, char *argv[]) {  
@@ -132,12 +100,22 @@ int main(int argc, char *argv[]) {
     }
     fptr = fopen("/tmp/waltzlist.txt","w");
     fclose(fptr);
-    lssdp_set_log_callback(log_callback);
+    //lssdp_set_log_callback(log_callback);
 
     lssdp_ctx lssdp = {
         .port = 1900,
         // .debug = true,           // debug
+        .neighbor_timeout = 15000,  // 15 seconds
+        .header = {
+            .search_target       = "ST_P2P",
+            .unique_service_name = "f835dd000001",
+            .sm_id               = "700000123",
+            .device_type         = "DEV_TYPE",
+            .location.suffix     = ":5678"
+        },
 
+        // callback
+        .neighbor_list_changed_callback     = show_neighbor_list,
         // callback
         .network_interface_changed_callback = show_interface_list_and_rebind_socket,
         .packet_received_callback           = show_ssdp_packet
@@ -183,6 +161,10 @@ int main(int argc, char *argv[]) {
         // doing task per 5 seconds
         if (current_time - last_time >= 5000) {
             lssdp_network_interface_update(&lssdp); // update network interface
+
+            lssdp_send_msearch(&lssdp);             // 2. send M-SEARCH
+            lssdp_neighbor_check_timeout(&lssdp);   // 4. check neighbor timeout
+            
             last_time = current_time;               // update last_time
         }
     }

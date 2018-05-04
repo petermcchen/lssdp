@@ -43,9 +43,9 @@ typedef struct lssdp_packet {
 /** Internal Function **/
 static int send_multicast_data(const char * data, const struct lssdp_interface interface, unsigned short ssdp_port);
 static int lssdp_send_response(lssdp_ctx * lssdp, struct sockaddr_in address);
-int lssdp_packet_parser(const char * data, size_t data_len, lssdp_packet * packet);
+static int lssdp_packet_parser(const char * data, size_t data_len, lssdp_packet * packet);
 static int parse_field_line(const char * data, size_t start, size_t end, lssdp_packet * packet);
-int get_colon_index(const char * string, size_t start, size_t end);
+static int get_colon_index(const char * string, size_t start, size_t end);
 static int trim_spaces(const char * string, size_t * start, size_t * end);
 static long long get_current_time();
 static int lssdp_log(int level, int line, const char * func, const char * format, ...);
@@ -355,7 +355,7 @@ int lssdp_socket_read(lssdp_ctx * lssdp) {
     if (strcmp(packet.st, lssdp->header.search_target) != 0) {
         // search target is not match
         if (lssdp->debug) {
-            lssdp_info("RECV <- %-8s   not match with %-14s %s\n", packet.method, lssdp->header.search_target, packet.location);
+            lssdp_info("RECV <- METHOD=%-8s   not match with TARGET=%-14s LOC=%s\n", packet.method, lssdp->header.search_target, packet.location);
         }
         goto end;
     }
@@ -694,7 +694,7 @@ static int lssdp_send_response(lssdp_ctx * lssdp, struct sockaddr_in address) {
     return 0;
 }
 
-int lssdp_packet_parser(const char * data, size_t data_len, lssdp_packet * packet) {
+static int lssdp_packet_parser(const char * data, size_t data_len, lssdp_packet * packet) {
     if (data == NULL) {
         lssdp_error("data should not be NULL\n");
         return -1;
@@ -819,7 +819,7 @@ static int parse_field_line(const char * data, size_t start, size_t end, lssdp_p
     return 0;
 }
 
-int get_colon_index(const char * string, size_t start, size_t end) {
+static int get_colon_index(const char * string, size_t start, size_t end) {
     size_t i;
     for (i = start; i <= end; i++) {
         if (string[i] == ':') {
