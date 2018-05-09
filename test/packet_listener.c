@@ -81,7 +81,22 @@ int show_neighbor_list(lssdp_ctx * lssdp) {
             nbr->device_type,
             nbr->update_time
         );
-        fprintf(fptr, "%s %s\n", nbr->sm_id, nbr->location);
+        // filter out location field now.
+        int loop, idx = -1;
+        int len = sizeof(nbr->location);
+        char buf[LSSDP_LOCATION_LEN];
+        for (loop = 0; loop <= len; loop++) {
+            if (nbr->location[loop] == ':') {
+                idx = loop;
+                break;
+            }
+        }
+        strncpy(buf, nbr->location, LSSDP_LOCATION_LEN);
+        if (idx != -1) {
+            buf[idx] = '\0';
+        }
+        //fprintf(fptr, "%s %s\n", nbr->sm_id, nbr->location);
+        fprintf(fptr, "%s %s\n", nbr->sm_id, buf);
     }
     printf("%s\n", i == 0 ? "Empty" : "");
     fclose(fptr);
